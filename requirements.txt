@@ -1,0 +1,6 @@
+streamlit
+streamlit-webrtc
+openai-whisper
+numpy
+scipy
+av
