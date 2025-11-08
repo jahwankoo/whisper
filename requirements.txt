@@ -1,5 +1,6 @@
 streamlit
-sounddevice
-scipy
+streamlit-webrtc
 openai-whisper
+scipy
+av
 numpy
