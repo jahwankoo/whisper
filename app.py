@@ -1,58 +1,41 @@
 import streamlit as st
+import sounddevice as sd
+from scipy.io.wavfile import write
 import whisper
 import tempfile
 import os
 
-st.set_page_config(page_title="Whisper STT", layout="centered")
-st.title("🎤 Whisper Speech-to-Text")
-
+# Whisper 모델 로드 (최초 1회만 로드됨)
 @st.cache_resource
-def load_model(model_name="base"):
-    return whisper.load_model(model_name)
+def load_model():
+    return whisper.load_model("base")
 
-model_name = st.selectbox("Model", ["tiny", "base"], index=0)
-model = load_model(model_name)
+model = load_model()
 
-st.markdown("### 🎵 Upload Audio File")
-uploaded_file = st.file_uploader(
-    "Choose an audio file (MP3, WAV, M4A, etc.)", 
-    type=["mp3", "wav", "m4a", "ogg", "flac"]
-)
+st.title("🎙 Whisper AI Voice Recorder & Transcriber")
 
-lang = st.selectbox("Language", ["auto", "ko", "en"], index=1)
+# 녹음 설정
+fs = 16000  # 샘플링 주파수
+duration = st.slider("Recording duration (seconds)", 3, 30, 10)
 
-if uploaded_file is not None:
-    st.audio(uploaded_file)
-    
-    if st.button("🚀 Transcribe"):
-        with st.spinner("Transcribing..."):
-            # 임시 파일로 저장
-            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
-                tmp_file.write(uploaded_file.read())
-                tmp_path = tmp_file.name
-            
-            try:
-                # 전사 실행
-                kwargs = {"fp16": False}
-                if lang != "auto":
-                    kwargs["language"] = lang
-                
-                result = model.transcribe(tmp_path, **kwargs)
-                
-                st.success("✅ Transcription Complete!")
-                st.markdown("### 📝 Result:")
-                st.markdown(f"**{result['text']}**")
-                
-                # 상세 정보
-                with st.expander("📊 Details"):
-                    st.json({
-                        "language": result.get("language"),
-                        "duration": f"{result.get('segments', [{}])[-1].get('end', 0):.2f}s" if result.get('segments') else "N/A"
-                    })
-                
-            except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
-            finally:
-                # 임시 파일 삭제
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
+if st.button("Start Recording"):
+    st.info("Recording... Speak now.")
+    audio = sd.rec(int(duration * fs), samplerate=fs, channels=1)
+    sd.wait()
+
+    # 임시 파일 저장
+    tmp_dir = tempfile.mkdtemp()
+    wav_path = os.path.join(tmp_dir, "recorded.wav")
+    write(wav_path, fs, audio)
+    st.success(f"Saved: {wav_path}")
+    st.audio(wav_path)
+
+    # Whisper로 음성 텍스트 변환
+    with st.spinner("Transcribing..."):
+        result = model.transcribe(wav_path, language="ko")
+    st.subheader("📝 Transcribed Text:")
+    st.write(result["text"])
+
+    # 다운로드 버튼
+    with open(wav_path, "rb") as f:
+        st.download_button("⬇️ Download Recording", f, file_name="recorded.wav")
